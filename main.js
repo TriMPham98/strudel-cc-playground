@@ -1,11 +1,9 @@
-import {
-  initAudioOnFirstClick,
-  webaudio,
-  controls,
-  evalScope,
-} from "@strudel/web";
+import { initAudioOnFirstClick } from "@strudel/web";
+import { initAudio, webaudio } from "@strudel/webaudio";
+import { mini, repl } from "@strudel/core";
 
 // Initialize Strudel
+let strudelContext;
 let isPlaying = false;
 let currentPattern;
 
@@ -42,12 +40,22 @@ async function initializeStrudel() {
     // Initialize audio context on first click
     await initAudioOnFirstClick();
 
+    // Initialize Strudel audio
+    await initAudio();
+
+    // Initialize the REPL context
+    strudelContext = repl({
+      prebake: true,
+      defaultOutput: webaudio(),
+    });
+
     log("Strudel initialized successfully!");
     log("Audio context ready. You can now run patterns.");
 
     return true;
   } catch (error) {
     log(`Error initializing Strudel: ${error.message}`);
+    console.error("Full error:", error);
     return false;
   }
 }
@@ -72,13 +80,10 @@ playBtn.addEventListener("click", async () => {
 stopBtn.addEventListener("click", async () => {
   if (isPlaying) {
     try {
-      if (currentPattern) {
-        currentPattern.stop();
+      if (strudelContext) {
+        strudelContext.stop();
         currentPattern = null;
       }
-
-      // Stop all patterns
-      controls.stop();
 
       isPlaying = false;
       playBtn.disabled = false;
@@ -102,20 +107,24 @@ runBtn.addEventListener("click", async () => {
     return;
   }
 
+  if (!strudelContext) {
+    log("Strudel not initialized. Please click 'Play' first.");
+    return;
+  }
+
   try {
     // Stop current pattern if running
     if (currentPattern) {
-      controls.stop();
+      strudelContext.stop();
     }
 
     log(`Running pattern: ${code}`);
 
-    // Evaluate and play the pattern using evalScope
-    const result = evalScope(code);
+    // Evaluate and play the pattern
+    const pattern = await strudelContext.evaluate(code);
 
-    if (result) {
-      // The pattern should start playing automatically
-      currentPattern = result;
+    if (pattern) {
+      currentPattern = pattern;
       log("Pattern started successfully!");
 
       // Simple visualizer
@@ -137,7 +146,7 @@ clearBtn.addEventListener("click", () => {
   log("Editor and output cleared.");
 });
 
-// Load example function
+// Load example function - make it global so HTML can access it
 window.loadExample = function (index) {
   if (index >= 0 && index < examples.length) {
     codeEditor.value = examples[index];
